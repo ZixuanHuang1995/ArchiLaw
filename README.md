@@ -184,6 +184,51 @@ Other facts worth keeping:
 - Cross-book cites that resolved include 總則編第1條 → 建築法第97條, 設計施工編第1條 → 建築法第11條, and 設備編第42條 → 設計施工編第114條 (`第一一四條`).
 - The seven unresolved spans are outside the corpus or ambiguous: `不受土地法第二十五條`, `不包括都市計畫法第三十二條`, `山坡地保育利用條例第三條`, `地質法第八條第一項`, `消防法…第六條`, and in 設備編第138-1條 the phrases `同編第一百八十二條` and `第二百五十九條`. That `同編` points back at 設計施工編, which was named earlier in the same sentence, not at 設備編. Week 1 does not do that anaphora. The leading words `不受` / `不包括` are also still stuck on two external titles; the cite is unresolved either way.
 
+### Demo
+
+`docker compose up -d --build` starts Postgres, Qdrant, the FastAPI service, and Streamlit.
+
+| service | URL |
+| --- | --- |
+| Streamlit UI | http://127.0.0.1:8571 |
+| API `POST /query` | http://127.0.0.1:8077/query |
+| Qdrant | http://127.0.0.1:6333 |
+| Postgres | `localhost:55432` |
+
+The first API start loads `intfloat/multilingual-e5-small` and, if the Qdrant collection is empty, embeds the clause index (about 1,093 articles and 4,784 clauses after dropping `（刪除）`). A collection that already has 4,784 vectors is reused.
+
+Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` / `OPENAI_BASE_URL`, `/query` stays in retrieval-only mode and still returns ranked evidence. Generation, when a key is set, asks for citations shaped like 【建築技術規則建築設計施工編 第55條第1項】 and drops any citation that is not in the retrieved articles. If the evidence does not contain the question's content words, the API refuses.
+
+```bash
+# local Ollama
+LLM_PROVIDER=ollama OPENAI_BASE_URL=http://host.docker.internal:11434/v1 \
+  OPENAI_API_KEY=ollama OPENAI_MODEL=qwen2.5 docker compose up -d --build
+```
+
+Dense search uses **multilingual-e5-small**, not BGE-M3. This machine has 4 CPUs and roughly 5–8 GB free. BGE-M3 is about 2.3 GB of weights; stacking it with `bge-reranker-v2-m3` does not leave room for Postgres, Qdrant, and the API. E5-small is 384-dimensional and uses the required `query:` / `passage:` prefixes. The reranker is implemented as mode `hybrid_rerank` and was **not** scored: the extra model was not loaded in this eval.
+
+Retrieval is parent-child. BM25 (jieba plus `config/jieba_building.txt`) and the dense index run on clauses, then scores roll up to the article. Hybrid mode also runs article-number lookup (`設計施工編第110-1條`, Chinese numerals) and fuses the three lists with RRF (k=60). Cross-references from the top articles are returned separately and marked `expansion`; they are not part of Recall@5.
+
+Screenshots from the VM, retrieval-only (no LLM key):
+
+![Article 110-1 lookup](docs/screenshots/lookup-110-1.png)
+
+![Private road and proviso evidence](docs/screenshots/private-road.png)
+
+![House-tax question refused](docs/screenshots/out-of-scope-refusal.png)
+
+### Retrieval eval
+
+Fifteen questions from [YuJunWang/taiwan-building-code-rag-benchmark](https://github.com/YuJunWang/taiwan-building-code-rag-benchmark) `docs/qa_reference.md` (MIT). That file publishes answers, not article ids. Gold ids in `twbc_rag/eval/questions.json` are this project's annotation against the ingested MOJ text. Recall@5 is the fraction of those gold articles inside the top 5. MRR uses the rank of the first gold hit. Expansion hits are excluded. Run: `uv run twbc eval` on 2026-11-18.
+
+| mode | Recall@5 | MRR |
+| --- | ---: | ---: |
+| bm25 | 0.601 | 0.652 |
+| dense | 0.729 | 0.719 |
+| hybrid | 0.851 | 0.756 |
+
+The open summary question (Q11, high-rise principles) scored 0 on every mode: the annotated articles (96, 97, 107, 181) were not in the top 5; 第259條 was. That is reported as a miss, not relabeled.
+
 ### Roadmap
 
 - **Week 2.** Download and parse the 補充圖例 PDFs/JPGs and the 31 `完整條文` PDFs. OCR or table-extract them into `figure_table.caption_or_ocr` and `storage_uri`. Load 國土署 / 內政部營建署函釋 into `interpretation`. Split effective dates down to the article, especially 設計施工編第301條 versus 第140–142、144條.
@@ -323,6 +368,56 @@ ER 圖見英文區。`interpretation` 兩張表是空的，留給 Week 2 的函�
 - 構造編一百十二年五月十日修正，自一百十三年一月一日施行。消防標準一百十三年四月二十四日修正，自一百十三年七月一日施行。
 - 跨法規對得上的例子：總則編第 1 條到建築法第 97 條、設計施工編第 1 條到建築法第 11 條、設備編第 42 條到設計施工編第 114 條（原文寫「第一一四條」）。
 - 七筆沒對上的是：土地法第 25 條、都市計畫法第 32 條、山坡地保育利用條例第 3 條、地質法第 8 條、消防法第 6 條，以及設備編第 138-1 條裡的「同編第一百八十二條」「第二百五十九條」。這裡的「同編」是沿用同一句前面的設計施工編，不是設備編自己。Week 1 沒有做這種指代。另外「不受」「不包括」有時還黏在外部法名前面，但不影響「未收錄所以 unresolved」的結論。
+
+### Demo
+
+一行啟動 Postgres、Qdrant、FastAPI、Streamlit：
+
+```bash
+docker compose up -d --build
+```
+
+| 服務 | 位址 |
+| --- | --- |
+| Streamlit | http://127.0.0.1:8571 |
+| API `POST /query` | http://127.0.0.1:8077/query |
+| Qdrant | http://127.0.0.1:6333 |
+| Postgres | `localhost:55432` |
+
+API 第一次啟動會載入 `intfloat/multilingual-e5-small`。Qdrant 裡若已有 4,784 個向量就直接用，否則會把去掉「（刪除）」之後的約 1,093 條、4,784 個項款目寫進去。
+
+沒有 `ANTHROPIC_API_KEY`，也沒有 `OPENAI_API_KEY` 或 `OPENAI_BASE_URL` 時，介面仍可查詢，只顯示排序後的條文（檢索模式）。有金鑰時，提示詞要求引用寫成【建築技術規則建築設計施工編 第55條第1項】，不在檢索證據裡的引用會被拿掉。問題裡的實詞若完全沒有出現在證據中，API 會拒絕回答。
+
+本機 Ollama 範例：
+
+```bash
+LLM_PROVIDER=ollama OPENAI_BASE_URL=http://host.docker.internal:11434/v1 \
+  OPENAI_API_KEY=ollama OPENAI_MODEL=qwen2.5 docker compose up -d --build
+```
+
+向量模型用 **multilingual-e5-small**，不是 BGE-M3。這台機器 4 個 CPU、剩餘記憶體大約 5 到 8 GB。BGE-M3 權重約 2.3 GB，再加 `bge-reranker-v2-m3` 就放不下 Postgres、Qdrant 和 API。E5-small 是 384 維，查詢和文章分別要加 `query:`、`passage:` 前綴。`hybrid_rerank` 模式有接 reranker，但這次評測沒有載入那個模型，所以沒有 rerank 數字。
+
+檢索是 parent-child：BM25（jieba，詞典在 `config/jieba_building.txt`）和向量都對項款目打分，再彙總到條。混合模式另外做條號查詢（「設計施工編第110-1條」、中文數字），三路用 RRF（k=60）合併。排名靠前的條會沿交叉引用再帶出最多 4 條，標成 expansion，不計入 Recall@5。
+
+下面三張圖是這台 VM 的檢索模式（沒有語言模型金鑰）：
+
+![第110-1條直接查詢](docs/screenshots/lookup-110-1.png)
+
+![私設通路與但書](docs/screenshots/private-road.png)
+
+![房屋稅問題被拒絕](docs/screenshots/out-of-scope-refusal.png)
+
+### 檢索評測
+
+15 題來自 [YuJunWang/taiwan-building-code-rag-benchmark](https://github.com/YuJunWang/taiwan-building-code-rag-benchmark) 的 `docs/qa_reference.md`（MIT）。原檔只有標準答案，沒有條號。`twbc_rag/eval/questions.json` 的 gold 是對照這次入庫的 MOJ 原文標的。Recall@5 是 gold 條文有多少落在前 5 名；MRR 是第一個 gold 的排名倒數。expansion 不算。2026-11-18 執行 `uv run twbc eval`。
+
+| 模式 | Recall@5 | MRR |
+| --- | ---: | ---: |
+| bm25 | 0.601 | 0.652 |
+| dense | 0.729 | 0.719 |
+| hybrid | 0.851 | 0.756 |
+
+開放式的 Q11（高層建築物防災原則）三種模式都是 0：標注的第 96、97、107、181 條沒有進前 5，檢索到的是第 259 條。這個 0 照實留下，沒有改標成檢索結果。
 
 ### 後續
 

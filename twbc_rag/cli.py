@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -70,3 +71,32 @@ def stats_command() -> None:
     """Print article / clause / cross-reference counts for the latest version of each law."""
     with session_scope() as session:
         typer.echo(format_stats(collect_stats(session)))
+
+
+@app.command()
+def index() -> None:
+    """Build the BM25 index and the Qdrant dense index."""
+    _setup_logging(False)
+    from twbc_rag.rag.engine import get_engine
+
+    get_engine().ensure_ready()
+    typer.echo(f"ready articles={len(get_engine().chunks)}")
+
+
+@app.command("eval")
+def eval_command(
+    rerank: bool = typer.Option(
+        False, help="Also score hybrid_rerank. Downloads bge-reranker-v2-m3."
+    ),
+) -> None:
+    """Recall@5 and MRR on the 15-question benchmark."""
+    _setup_logging(False)
+    from twbc_rag.eval.run import evaluate, format_table
+
+    modes = ("bm25", "dense", "hybrid", "hybrid_rerank") if rerank else ("bm25", "dense", "hybrid")
+    report = evaluate(modes)
+    typer.echo(format_table(report))
+    out = DEFAULT_JSONL_DIR / "eval_report.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    typer.echo(f"wrote {out}")
