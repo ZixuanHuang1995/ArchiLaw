@@ -1,0 +1,54 @@
+# Default corpus for `twbc ingest`. Add a law by appending a pcode.
+# `aliases` are the names citations actually use (full title and the short 編 name).
+# `parent_act_*` is what 「本法」 means inside that instrument. 建築技術規則
+# defines 本法 as 建築法 in the general provisions; the design/structure/equipment
+# books use 本法 without repeating the definition. The fire standard defines
+# 本法 as 消防法, which is outside this corpus until that pcode is added.
+laws:
+  - pcode: D0070109
+    doc_type: law
+    aliases:
+      - 建築法
+
+  - pcode: D0070114
+    doc_type: order
+    aliases:
+      - 建築技術規則總則編
+      - 總則編
+    parent_act_pcode: D0070109
+    parent_act_name: 建築法
+
+  - pcode: D0070115
+    doc_type: order
+    aliases:
+      - 建築技術規則建築設計施工編
+      - 建築設計施工編
+      - 設計施工編
+    parent_act_pcode: D0070109
+    parent_act_name: 建築法
+
+  - pcode: D0070116
+    doc_type: order
+    aliases:
+      - 建築技術規則建築構造編
+      - 建築構造編
+      - 構造編
+    parent_act_pcode: D0070109
+    parent_act_name: 建築法
+
+  - pcode: D0070117
+    doc_type: order
+    aliases:
+      - 建築技術規則建築設備編
+      - 建築設備編
+      - 設備編
+    parent_act_pcode: D0070109
+    parent_act_name: 建築法
+
+  - pcode: D0120029
+    doc_type: order
+    aliases:
+      - 各類場所消防安全設備設置標準
+      - 消防安全設備設置標準
+    # 消防法 is not ingested in Week 1. 本法 stays unresolved until it is.
+    parent_act_name: 消防法

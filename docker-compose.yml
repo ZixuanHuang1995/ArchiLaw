@@ -1,0 +1,31 @@
+# Week 1 runs Postgres only. Qdrant, the API, and the UI are left commented
+# so later milestones can turn them on without rearranging the file.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: twbc
+      POSTGRES_PASSWORD: twbc
+      POSTGRES_DB: twbc
+    ports:
+      - "55432:5432"
+    volumes:
+      - twbc_pg:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twbc -d twbc"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # qdrant:
+  #   image: qdrant/qdrant:v1.12.5
+  #   profiles: ["retrieval"]
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - twbc_qdrant:/qdrant/storage
+
+volumes:
+  twbc_pg:
+  # twbc_qdrant:
