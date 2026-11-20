@@ -209,6 +209,8 @@ Dense search uses **multilingual-e5-small**, not BGE-M3. This machine has 4 CPUs
 
 Retrieval is parent-child. BM25 (jieba plus `config/jieba_building.txt`) and the dense index run on clauses, then scores roll up to the article. Hybrid mode also runs article-number lookup (`設計施工編第110-1條`, Chinese numerals) and fuses the three lists with RRF (k=60). Cross-references from the top articles are returned separately and marked `expansion`; they are not part of Recall@5.
 
+Not committed, and how to recreate them: `.env` (copy `.env.example`), the MOJ zip under `data/raw/` (`uv run twbc ingest` or the API's first startup does not need the zip if Postgres is already loaded; a fresh database needs ingest), JSONL under `data/processed/`, Hugging Face weights for `intfloat/multilingual-e5-small` (downloaded on first API start into the Hugging Face cache), and the Postgres / Qdrant Docker volumes (created by `docker compose up`). None of these are in git, and Git LFS is not used.
+
 Screenshots from the VM, retrieval-only (no LLM key):
 
 ![Article 110-1 lookup](docs/screenshots/lookup-110-1.png)
@@ -398,6 +400,8 @@ LLM_PROVIDER=ollama OPENAI_BASE_URL=http://host.docker.internal:11434/v1 \
 向量模型用 **multilingual-e5-small**，不是 BGE-M3。這台機器 4 個 CPU、剩餘記憶體大約 5 到 8 GB。BGE-M3 權重約 2.3 GB，再加 `bge-reranker-v2-m3` 就放不下 Postgres、Qdrant 和 API。E5-small 是 384 維，查詢和文章分別要加 `query:`、`passage:` 前綴。`hybrid_rerank` 模式有接 reranker，但這次評測沒有載入那個模型，所以沒有 rerank 數字。
 
 檢索是 parent-child：BM25（jieba，詞典在 `config/jieba_building.txt`）和向量都對項款目打分，再彙總到條。混合模式另外做條號查詢（「設計施工編第110-1條」、中文數字），三路用 RRF（k=60）合併。排名靠前的條會沿交叉引用再帶出最多 4 條，標成 expansion，不計入 Recall@5。
+
+不會進 git、要在本機重新產生的東西：`.env`（從 `.env.example` 複製）、`data/raw/` 的法務部 zip（`uv run twbc ingest`）、`data/processed/` 的 JSONL、`intfloat/multilingual-e5-small` 權重（API 第一次啟動時下載）、以及 Postgres / Qdrant 的 Docker volume（`docker compose up` 建立）。沒有使用 Git LFS。
 
 下面三張圖是這台 VM 的檢索模式（沒有語言模型金鑰）：
 
